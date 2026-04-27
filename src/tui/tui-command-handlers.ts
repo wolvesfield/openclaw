@@ -448,6 +448,35 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "quit":
         requestExit();
         break;
+      // Hidden cheat codes — not in /help or autocomplete
+      case "iddqd":
+        chatLog.addSystem("God mode: ON. The gateway is now immortal. Probably.");
+        break;
+      case "idkfa":
+        chatLog.addSystem("All weapons acquired. Try not to --force-push to production.");
+        break;
+      case "xyzzy":
+        chatLog.addSystem("A hollow voice says: 'Fool.'");
+        break;
+      case "noclip":
+        chatLog.addSystem("Noclip: ON. You can now walk through rate limits. Results may vary.");
+        break;
+      case "rosebud":
+        chatLog.addSystem("+§1,000,000 tokens. Check your balance: it's still the same.");
+        break;
+      case "molt":
+        chatLog.addSystem(
+          "Molting sequence initiated. Soft-shell phase active. Please don't stare.",
+        );
+        break;
+      case "matrix":
+        chatLog.addSystem("There is no shell. There is only the gateway.");
+        break;
+      case "konami":
+        chatLog.addSystem(
+          "↑↑↓↓←→←→BA — Achievement unlocked: You found the thing.",
+        );
+        break;
       default:
         await sendMessage(raw);
         break;
