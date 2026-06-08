@@ -92,7 +92,7 @@ beforeEach(() => {
 
 function createMinimalRun(params?: {
   opts?: GetReplyOptions;
-  resolvedVerboseLevel?: "off" | "on";
+  resolvedVerboseLevel?: "off" | "on" | "full" | undefined;
   sessionStore?: Record<string, SessionEntry>;
   sessionEntry?: SessionEntry;
   sessionKey?: string;
@@ -129,7 +129,7 @@ function createMinimalRun(params?: {
       provider: "anthropic",
       model: "claude",
       thinkLevel: "low",
-      verboseLevel: params?.resolvedVerboseLevel ?? "off",
+      verboseLevel: params?.resolvedVerboseLevel,
       elevatedLevel: "off",
       bashElevated: {
         enabled: false,
@@ -164,7 +164,7 @@ function createMinimalRun(params?: {
         storePath: params?.storePath,
         sessionCtx,
         defaultModel: "anthropic/claude-opus-4-5",
-        resolvedVerboseLevel: params?.resolvedVerboseLevel ?? "off",
+        resolvedVerboseLevel: params?.resolvedVerboseLevel,
         isNewSession: false,
         blockStreamingEnabled: params?.blockStreamingEnabled ?? false,
         resolvedBlockStreamingBreak: "message_end",
@@ -678,7 +678,10 @@ describe("runReplyAgent typing (heartbeat)", () => {
   it("announces model fallback only when verbose mode is enabled", async () => {
     const cases = [
       { name: "verbose on", verbose: "on" as const, expectNotice: true },
+      { name: "verbose full", verbose: "full" as const, expectNotice: true },
       { name: "verbose off", verbose: "off" as const, expectNotice: false },
+      // undefined = unconfigured; must NOT send notices to prevent repetitive spam
+      { name: "verbose undefined", verbose: undefined, expectNotice: false },
     ] as const;
     for (const testCase of cases) {
       const sessionEntry: SessionEntry = {
