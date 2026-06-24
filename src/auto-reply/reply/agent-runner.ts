@@ -440,7 +440,9 @@ export async function runReplyAgent(params: {
     const modelUsed = runResult.meta?.agentMeta?.model ?? fallbackModel ?? defaultModel;
     const providerUsed =
       runResult.meta?.agentMeta?.provider ?? fallbackProvider ?? followupRun.run.provider;
-    const verboseEnabled = resolvedVerboseLevel !== "off";
+    // Only send verbose notices when explicitly enabled; undefined (unconfigured)
+    // must not trigger notices to avoid repetitive fallback/status spam.
+    const verboseEnabled = resolvedVerboseLevel === "on" || resolvedVerboseLevel === "full";
     const selectedProvider = followupRun.run.provider;
     const selectedModel = followupRun.run.model;
     const fallbackStateEntry =

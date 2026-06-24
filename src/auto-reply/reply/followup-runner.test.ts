@@ -486,6 +486,27 @@ describe("createFollowupRunner typing cleanup", () => {
     expect(typing.markDispatchIdle).toHaveBeenCalled();
   });
 
+  it("sends error reply to user when all models fail (no silent drop)", async () => {
+    const onBlockReply = vi.fn(async () => {});
+    runEmbeddedPiAgentMock.mockRejectedValueOnce(
+      new Error("All models failed (2): a: err | b: err"),
+    );
+
+    const runner = createFollowupRunner({
+      opts: { onBlockReply },
+      typing: createMockTypingController(),
+      typingMode: "instant",
+      defaultModel: "anthropic/claude-opus-4-5",
+    });
+
+    await runner(baseQueuedRun("whatsapp"));
+
+    expect(onBlockReply).toHaveBeenCalledOnce();
+    const sentText: string = onBlockReply.mock.calls[0][0].text;
+    expect(sentText).toMatch(/⚠️ Agent failed before reply/);
+    expect(sentText).toMatch(/All models failed/);
+  });
+
   it("calls both markRunComplete and markDispatchIdle on successful delivery", async () => {
     const typing = createMockTypingController();
     const onBlockReply = vi.fn(async () => {});
