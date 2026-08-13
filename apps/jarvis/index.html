@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CIPHER // Command Deck</title>
+<style>
+  /* ---------- tokens ---------- */
+  :root {
+    --bg: #05070d;
+    --bg2: #090d18;
+    --panel: rgba(13, 20, 36, 0.72);
+    --panel-edge: rgba(64, 208, 255, 0.18);
+    --cyan: #40d0ff;
+    --cyan-dim: rgba(64, 208, 255, 0.45);
+    --amber: #ffb340;
+    --red: #ff4d5e;
+    --green: #3dffa0;
+    --text: #cfe8ff;
+    --text-dim: #6d87a8;
+    --mono: "SF Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ---------- parallax layers ---------- */
+  .layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  #stars-far, #stars-near { width: 100%; height: 100%; }
+  #grid-floor {
+    position: fixed; left: -25%; right: -25%; bottom: -12vh; height: 46vh;
+    background:
+      linear-gradient(transparent, rgba(64,208,255,0.05)),
+      repeating-linear-gradient(90deg, rgba(64,208,255,0.14) 0 1px, transparent 1px 64px),
+      repeating-linear-gradient(0deg, rgba(64,208,255,0.14) 0 1px, transparent 1px 44px);
+    transform: perspective(480px) rotateX(62deg);
+    transform-origin: bottom;
+    mask-image: linear-gradient(transparent, #000 35%);
+    -webkit-mask-image: linear-gradient(transparent, #000 35%);
+    z-index: 0; pointer-events: none;
+  }
+  .scanlines {
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    position: fixed; inset: 0; z-index: 49; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+  }
+
+  /* ---------- boot overlay ---------- */
+  #boot {
+    position: fixed; inset: 0; z-index: 100; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 28px; transition: opacity 0.9s ease, visibility 0.9s;
+  }
+  #boot.done { opacity: 0; visibility: hidden; }
+  .reactor {
+    width: 148px; height: 148px; position: relative;
+  }
+  .reactor .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--cyan);
+    border-right-color: var(--cyan-dim);
+    animation: spin 2.2s linear infinite;
+  }
+  .reactor .ring:nth-child(2) { inset: 16px; animation-duration: 1.6s; animation-direction: reverse; border-top-color: var(--amber); border-right-color: transparent; }
+  .reactor .ring:nth-child(3) { inset: 32px; animation-duration: 3s; }
+  .reactor .core {
+    position: absolute; inset: 52px; border-radius: 50%;
+    background: radial-gradient(circle, #bff1ff 0%, var(--cyan) 40%, transparent 75%);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity: 0.55; transform: scale(0.92);} 50% { opacity: 1; transform: scale(1.05);} }
+  #boot-log { font-size: 12px; color: var(--text-dim); min-height: 72px; text-align: center; line-height: 1.9; }
+  #boot-log .ok { color: var(--green); }
+
+  /* ---------- shell ---------- */
+  main { position: relative; z-index: 2; max-width: 1180px; margin: 0 auto; padding: 0 22px 90px; }
+
+  header.hud {
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 4px; backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--panel-edge);
+    background: linear-gradient(rgba(5,7,13,0.85), rgba(5,7,13,0.55));
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand .mini-reactor { width: 34px; height: 34px; position: relative; }
+  .brand .mini-reactor .ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid transparent; border-top-color: var(--cyan); animation: spin 3s linear infinite; }
+  .brand .mini-reactor .core { position: absolute; inset: 11px; border-radius: 50%; background: radial-gradient(circle, #bff1ff, var(--cyan) 60%, transparent); animation: pulse 2s infinite; }
+  .brand h1 { font-size: 17px; letter-spacing: 0.42em; font-weight: 600; color: #eaf7ff; text-shadow: 0 0 18px var(--cyan-dim); }
+  .brand h1 span { color: var(--cyan); }
+  #conn-pill {
+    display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.14em;
+    padding: 7px 14px; border: 1px solid var(--panel-edge); border-radius: 999px;
+    color: var(--text-dim); cursor: pointer; user-select: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  #conn-pill:hover { border-color: var(--cyan-dim); box-shadow: 0 0 14px rgba(64,208,255,0.15); }
+  #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px var(--red); transition: background 0.3s, box-shadow 0.3s; }
+  #conn-pill.online #conn-dot { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  #conn-pill.connecting #conn-dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); animation: pulse 1s infinite; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 74px 0 40px; text-align: center; position: relative; }
+  .hero h2 {
+    font-size: clamp(30px, 5.6vw, 58px); font-weight: 700; letter-spacing: 0.14em;
+    background: linear-gradient(100deg, #eaf7ff 20%, var(--cyan) 50%, #eaf7ff 80%);
+    background-size: 220% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: sheen 5.5s linear infinite;
+  }
+  @keyframes sheen { to { background-position: 220% center; } }
+  .hero p { margin-top: 16px; color: var(--text-dim); font-size: 13.5px; letter-spacing: 0.2em; }
+  .hero .tick { display: inline-block; width: 9px; height: 17px; background: var(--cyan); vertical-align: -3px; margin-left: 6px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- fleet cards ---------- */
+  .fleet { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; margin: 26px 0 60px; }
+  .agent-card {
+    border: 1px solid var(--panel-edge); border-radius: 14px; background: var(--panel);
+    padding: 20px 20px 18px; position: relative; overflow: hidden;
+    backdrop-filter: blur(10px);
+    transition: transform 0.35s cubic-bezier(.2,.9,.3,1.2), border-color 0.35s, box-shadow 0.35s;
+    will-change: transform;
+  }
+  .agent-card:hover { transform: translateY(-6px); border-color: var(--cyan-dim); box-shadow: 0 14px 40px rgba(64,208,255,0.12); }
+  .agent-card::before {
+    content: ""; position: absolute; top: 0; left: -80%; width: 55%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(64,208,255,0.09), transparent);
+    transition: left 0.7s ease;
+  }
+  .agent-card:hover::before { left: 130%; }
+  .agent-card h3 { font-size: 14px; letter-spacing: 0.28em; color: #eaf7ff; display: flex; align-items: center; gap: 10px; }
+  .agent-card .role { margin-top: 6px; font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; }
+  .agent-card .model { margin-top: 14px; font-size: 11px; color: var(--cyan); word-break: break-all; opacity: 0.85; }
+  .agent-card .bar { margin-top: 14px; height: 3px; border-radius: 3px; background: rgba(64,208,255,0.12); overflow: hidden; }
+  .agent-card .bar i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--cyan), var(--amber)); border-radius: 3px; animation: scanbar 2.6s ease-in-out infinite; }
+  @keyframes scanbar { 0%,100% { transform: translateX(-30%);} 50% { transform: translateX(230%);} }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); flex: none; }
+  .agent-card.idle .status-dot { background: var(--text-dim); box-shadow: none; }
+  .agent-card.idle .bar i { animation-play-state: paused; opacity: 0.25; }
+
+  /* ---------- console ---------- */
+  .console-wrap { border: 1px solid var(--panel-edge); border-radius: 16px; background: var(--panel); backdrop-filter: blur(12px); overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,0.45); }
+  .console-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--panel-edge); font-size: 11px; letter-spacing: 0.24em; color: var(--text-dim); }
+  .console-head .lights { display: flex; gap: 7px; }
+  .console-head .lights i { width: 9px; height: 9px; border-radius: 50%; background: rgba(64,208,255,0.25); }
+  .console-head .lights i:first-child { background: var(--cyan-dim); }
+  #log {
+    height: 46vh; min-height: 300px; overflow-y: auto; padding: 20px 20px 12px;
+    display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth;
+  }
+  #log::-webkit-scrollbar { width: 4px; } #log::-webkit-scrollbar-thumb { background: var(--cyan-dim); border-radius: 4px; }
+  .msg { max-width: 78%; font-size: 13px; line-height: 1.65; padding: 11px 15px; border-radius: 11px; white-space: pre-wrap; word-break: break-word; animation: rise 0.35s cubic-bezier(.2,.9,.3,1.15); }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px);} }
+  .msg.user { align-self: flex-end; background: linear-gradient(140deg, rgba(64,208,255,0.16), rgba(64,208,255,0.06)); border: 1px solid rgba(64,208,255,0.3); color: #eaf7ff; }
+  .msg.bot  { align-self: flex-start; background: rgba(9,13,24,0.85); border: 1px solid var(--panel-edge); }
+  .msg.sys  { align-self: center; font-size: 11px; color: var(--text-dim); background: transparent; border: 1px dashed rgba(109,135,168,0.35); letter-spacing: 0.08em; }
+  .msg.err  { align-self: center; font-size: 11.5px; color: var(--red); border: 1px solid rgba(255,77,94,0.4); background: rgba(255,77,94,0.06); }
+  .msg .tag { display: block; font-size: 9.5px; letter-spacing: 0.3em; color: var(--cyan); margin-bottom: 6px; opacity: 0.8; }
+  .msg.user .tag { color: var(--amber); text-align: right; }
+  .typing i { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--cyan); animation: bounce 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: 0.15s; } .typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4;} 30% { transform: translateY(-5px); opacity: 1;} }
+
+  .composer { display: flex; gap: 12px; padding: 15px 18px; border-top: 1px solid var(--panel-edge); background: rgba(5,7,13,0.5); }
+  #input {
+    flex: 1; background: rgba(9,13,24,0.9); border: 1px solid var(--panel-edge); border-radius: 10px;
+    color: var(--text); font-family: var(--mono); font-size: 13.5px; padding: 13px 16px; outline: none; resize: none;
+    transition: border-color 0.3s, box-shadow 0.3s; line-height: 1.5; max-height: 130px;
+  }
+  #input:focus { border-color: var(--cyan-dim); box-shadow: 0 0 0 3px rgba(64,208,255,0.09), 0 0 22px rgba(64,208,255,0.08); }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    position: relative; border: 1px solid var(--cyan-dim); border-radius: 10px;
+    background: linear-gradient(160deg, rgba(64,208,255,0.14), rgba(64,208,255,0.03));
+    color: var(--cyan); font-family: var(--mono); font-size: 12px; letter-spacing: 0.22em;
+    padding: 0 24px; cursor: pointer; overflow: hidden;
+    transition: color 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.15s;
+  }
+  .btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%); transform: translateX(-120%); transition: transform 0.55s ease; }
+  .btn:hover { color: #05121c; background: var(--cyan); box-shadow: 0 0 26px rgba(64,208,255,0.5); border-color: var(--cyan); }
+  .btn:hover::after { transform: translateX(120%); }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled { opacity: 0.35; pointer-events: none; }
+  .btn.ghost { background: transparent; border-color: rgba(109,135,168,0.4); color: var(--text-dim); }
+  .btn.ghost:hover { color: var(--red); border-color: var(--red); background: rgba(255,77,94,0.07); box-shadow: 0 0 18px rgba(255,77,94,0.25); }
+
+  /* ---------- settings drawer ---------- */
+  #drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); z-index: 60;
+    background: rgba(7,10,19,0.97); border-left: 1px solid var(--panel-edge);
+    padding: 30px 26px; transform: translateX(105%); transition: transform 0.45s cubic-bezier(.2,.9,.25,1);
+    backdrop-filter: blur(18px); overflow-y: auto;
+  }
+  #drawer.open { transform: translateX(0); box-shadow: -30px 0 80px rgba(0,0,0,0.6); }
+  #drawer h3 { font-size: 13px; letter-spacing: 0.3em; color: var(--cyan); margin-bottom: 26px; }
+  #drawer label { display: block; font-size: 10.5px; letter-spacing: 0.2em; color: var(--text-dim); margin: 18px 0 7px; }
+  #drawer input {
+    width: 100%; background: rgba(9,13,24,0.9); border: 1px solid var(--panel-edge); border-radius: 8px;
+    color: var(--text); font-family: var(--mono); font-size: 12.5px; padding: 11px 13px; outline: none;
+  }
+  #drawer input:focus { border-color: var(--cyan-dim); }
+  #drawer .btn { width: 100%; padding: 13px 0; margin-top: 26px; }
+  #drawer .hint { margin-top: 22px; font-size: 10.5px; line-height: 1.8; color: var(--text-dim); border-top: 1px dashed rgba(109,135,168,0.3); padding-top: 16px; }
+  #drawer .hint code { color: var(--cyan); }
+
+  /* ---------- sections / reveal on scroll ---------- */
+  section.panel-block { margin-top: 64px; }
+  section.panel-block h2.sec { font-size: 12px; letter-spacing: 0.4em; color: var(--text-dim); margin-bottom: 18px; }
+  section.panel-block h2.sec::before { content: "// "; color: var(--cyan); }
+  .reveal { opacity: 0; transform: translateY(34px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.9,.3,1); }
+  .reveal.shown { opacity: 1; transform: none; }
+
+  #activity { border: 1px solid var(--panel-edge); border-radius: 14px; background: var(--panel); padding: 16px 18px; max-height: 220px; overflow-y: auto; font-size: 11.5px; line-height: 2; color: var(--text-dim); }
+  #activity .row span.t { color: var(--cyan); margin-right: 10px; }
+  #activity::-webkit-scrollbar { width: 4px; } #activity::-webkit-scrollbar-thumb { background: var(--cyan-dim); }
+
+  @media (max-width: 640px) {
+    .msg { max-width: 92%; }
+    .hero { padding-top: 46px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars-far" class="layer"></canvas>
+<canvas id="stars-near" class="layer"></canvas>
+<div id="grid-floor"></div>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div id="boot">
+  <div class="reactor"><div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="core"></div></div>
+  <div id="boot-log"></div>
+</div>
+
+<main>
+  <header class="hud">
+    <div class="brand">
+      <div class="mini-reactor"><div class="ring"></div><div class="core"></div></div>
+      <h1>CIPHER<span>&nbsp;//&nbsp;</span>COMMAND&nbsp;DECK</h1>
+    </div>
+    <div id="conn-pill" title="Open connection settings">
+      <span id="conn-dot"></span><span id="conn-label">OFFLINE</span>
+    </div>
+  </header>
+
+  <div class="hero">
+    <h2 data-parallax="0.18">AT YOUR SERVICE, BROSKI</h2>
+    <p>HERMES ORCHESTRATOR &middot; AGENT FLEET ONLINE<span class="tick"></span></p>
+  </div>
+
+  <section class="fleet" data-parallax="0.08">
+    <div class="agent-card idle" id="card-hermes">
+      <h3><span class="status-dot"></span>HERMES</h3>
+      <div class="role">ORCHESTRATOR &middot; REASONING &middot; COMMAND</div>
+      <div class="model">deepseek/deepseek-r1:free</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div class="agent-card idle" id="card-worker">
+      <h3><span class="status-dot"></span>WORKER</h3>
+      <div class="role">EXECUTION &middot; CODE &middot; SHELL</div>
+      <div class="model">meta-llama/llama-3.1-405b-instruct:free</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div class="agent-card idle" id="card-researcher">
+      <h3><span class="status-dot"></span>RESEARCHER</h3>
+      <div class="role">INTEL &middot; WEB &middot; ANALYSIS</div>
+      <div class="model">deepseek/deepseek-r1:free</div>
+      <div class="bar"><i></i></div>
+    </div>
+  </section>
+
+  <section class="panel-block reveal">
+    <h2 class="sec">DIRECT UPLINK</h2>
+    <div class="console-wrap">
+      <div class="console-head">
+        <span>SESSION&nbsp;:&nbsp;<span id="session-label">main</span></span>
+        <div class="lights"><i></i><i></i><i></i></div>
+      </div>
+      <div id="log"></div>
+      <div class="composer">
+        <textarea id="input" rows="1" placeholder="Issue a directive…"></textarea>
+        <button class="btn" id="send">SEND</button>
+        <button class="btn ghost" id="abort" title="Abort current run">ABORT</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-block reveal">
+    <h2 class="sec">ACTIVITY FEED</h2>
+    <div id="activity"><div class="row"><span class="t">--:--:--</span>standing by…</div></div>
+  </section>
+</main>
+
+<div id="drawer">
+  <h3>UPLINK CONFIG</h3>
+  <label>GATEWAY WS URL</label>
+  <input id="cfg-url" placeholder="ws://127.0.0.1:18789" spellcheck="false" />
+  <label>GATEWAY TOKEN</label>
+  <input id="cfg-token" type="password" placeholder="gateway auth token" spellcheck="false" />
+  <label>SESSION KEY</label>
+  <input id="cfg-session" placeholder="main" spellcheck="false" />
+  <button class="btn" id="cfg-save">CONNECT</button>
+  <div class="hint">
+    Serve this page from the gateway host and tunnel it, or open via
+    <code>localhost</code>. Token comes from <code>openclaw config get gateway.auth.token</code>.
+    Plain-HTTP pages need <code>gateway.controlUi.allowInsecureAuth: true</code> (loopback only).
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= parallax starfield ================= */
+(() => {
+  const far = document.getElementById("stars-far");
+  const near = document.getElementById("stars-near");
+  const mk = (canvas, n, speed, size) => {
+    const ctx = canvas.getContext("2d");
+    let w, h, stars = [];
+    const resize = () => {
+      w = canvas.width = innerWidth * devicePixelRatio;
+      h = canvas.height = innerHeight * devicePixelRatio;
+      stars = Array.from({ length: n }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        r: (Math.random() * size + 0.4) * devicePixelRatio,
+        tw: Math.random() * Math.PI * 2,
+      }));
+    };
+    resize(); addEventListener("resize", resize);
+    return { ctx, get w() { return w; }, get h() { return h; }, stars, speed,
+      draw(t, mx, my, scroll) {
+        this.ctx.clearRect(0, 0, w, h);
+        for (const s of this.stars) {
+          const flick = 0.55 + 0.45 * Math.sin(t / 900 + s.tw);
+          const ox = mx * this.speed * 40 * devicePixelRatio;
+          const oy = (my * this.speed * 40 - scroll * this.speed * 0.25) * devicePixelRatio;
+          let y = (s.y + oy) % h; if (y < 0) y += h;
+          let x = (s.x + ox) % w; if (x < 0) x += w;
+          this.ctx.beginPath();
+          this.ctx.arc(x, y, s.r, 0, 7);
+          this.ctx.fillStyle = `rgba(160,220,255,${0.35 * flick})`;
+          this.ctx.fill();
+        }
+      } };
+  };
+  const L1 = mk(far, 130, 0.35, 1.1), L2 = mk(near, 55, 1, 1.9);
+  let mx = 0, my = 0;
+  addEventListener("pointermove", (e) => {
+    mx = (e.clientX / innerWidth - 0.5) * 2;
+    my = (e.clientY / innerHeight - 0.5) * 2;
+  });
+  const loop = (t) => {
+    const sc = scrollY;
+    L1.draw(t, mx, my, sc); L2.draw(t, mx, my, sc);
+    // element parallax
+    document.querySelectorAll("[data-parallax]").forEach((el) => {
+      const f = parseFloat(el.dataset.parallax);
+      el.style.transform = `translate3d(${mx * f * -30}px, ${my * f * -18 + sc * f * -0.35}px, 0)`;
+    });
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+})();
+
+/* ================= reveal on scroll ================= */
+(() => {
+  const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add("shown")), { threshold: 0.12 });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+})();
+
+/* ================= boot sequence ================= */
+(() => {
+  const lines = [
+    "CIPHER KERNEL………………… <span class='ok'>LOADED</span>",
+    "HERMES ORCHESTRATOR……… <span class='ok'>ARMED</span>",
+    "AGENT FLEET (3)……………… <span class='ok'>STANDBY</span>",
+    "UPLINK MODULE………………… <span class='ok'>READY</span>",
+  ];
+  const el = document.getElementById("boot-log");
+  let i = 0;
+  const step = () => {
+    if (i < lines.length) {
+      el.innerHTML += lines[i++] + "<br/>";
+      setTimeout(step, 340);
+    } else {
+      setTimeout(() => document.getElementById("boot").classList.add("done"), 500);
+    }
+  };
+  setTimeout(step, 400);
+})();
+
+/* ================= gateway client ================= */
+const store = {
+  get url() { return localStorage.getItem("cipher.url") || `ws${location.protocol === "https:" ? "s" : ""}://${location.hostname || "127.0.0.1"}:18789`; },
+  set url(v) { localStorage.setItem("cipher.url", v); },
+  get token() { return localStorage.getItem("cipher.token") || ""; },
+  set token(v) { localStorage.setItem("cipher.token", v); },
+  get session() { return localStorage.getItem("cipher.session") || "main"; },
+  set session(v) { localStorage.setItem("cipher.session", v); },
+};
+
+const ui = {
+  log: document.getElementById("log"),
+  input: document.getElementById("input"),
+  send: document.getElementById("send"),
+  abort: document.getElementById("abort"),
+  pill: document.getElementById("conn-pill"),
+  connLabel: document.getElementById("conn-label"),
+  activity: document.getElementById("activity"),
+  sessionLabel: document.getElementById("session-label"),
+  cards: {
+    hermes: document.getElementById("card-hermes"),
+    worker: document.getElementById("card-worker"),
+    researcher: document.getElementById("card-researcher"),
+  },
+};
+
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+const ts = () => new Date().toTimeString().slice(0, 8);
+
+function addMsg(kind, text, tag) {
+  const div = document.createElement("div");
+  div.className = `msg ${kind}`;
+  if (tag) { const t = document.createElement("span"); t.className = "tag"; t.textContent = tag; div.appendChild(t); }
+  div.appendChild(document.createTextNode(text));
+  ui.log.appendChild(div);
+  ui.log.scrollTop = ui.log.scrollHeight;
+  return div;
+}
+function feed(line) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `<span class="t">${ts()}</span>`;
+  row.appendChild(document.createTextNode(line));
+  ui.activity.prepend(row);
+  while (ui.activity.children.length > 60) ui.activity.lastChild.remove();
+}
+function setConn(state) {
+  ui.pill.classList.remove("online", "connecting");
+  if (state === "online") { ui.pill.classList.add("online"); ui.connLabel.textContent = "ONLINE"; }
+  else if (state === "connecting") { ui.pill.classList.add("connecting"); ui.connLabel.textContent = "LINKING…"; }
+  else ui.connLabel.textContent = "OFFLINE";
+}
+function setFleetActive(active) {
+  for (const c of Object.values(ui.cards)) c.classList.toggle("idle", !active);
+}
+
+class Gateway {
+  constructor() { this.ws = null; this.pending = new Map(); this.nonce = null; this.closed = false; this.backoff = 900; this.activeRun = null; this.streamEl = null; this.streamText = ""; }
+  connect() {
+    this.closed = false;
+    setConn("connecting");
+    try { this.ws = new WebSocket(store.url); }
+    catch (e) { addMsg("err", `Bad gateway URL: ${e.message}`); setConn("off"); return; }
+    this.ws.onmessage = (ev) => this.onFrame(ev.data);
+    this.ws.onclose = () => {
+      setConn("off"); setFleetActive(false);
+      this.pending.forEach((p) => p.reject(new Error("connection closed")));
+      this.pending.clear();
+      if (!this.closed) {
+        setTimeout(() => this.connect(), this.backoff);
+        this.backoff = Math.min(this.backoff * 1.7, 15000);
+      }
+    };
+    this.ws.onerror = () => {};
+    // some gateways may not send a challenge (auth none) — connect after grace period
+    setTimeout(() => { if (this.ws?.readyState === 1 && !this.sentConnect) this.doConnect(); }, 800);
+  }
+  disconnect() { this.closed = true; this.ws?.close(); }
+  onFrame(raw) {
+    let f; try { f = JSON.parse(raw); } catch { return; }
+    if (f.type === "event") {
+      if (f.event === "connect.challenge") { this.nonce = f.payload?.nonce ?? null; this.doConnect(); return; }
+      if (f.event === "chat") this.onChat(f.payload);
+      if (f.event === "agent") this.onAgent(f.payload);
+      return;
+    }
+    if (f.type === "res") {
+      const p = this.pending.get(f.id);
+      if (!p) return;
+      this.pending.delete(f.id);
+      f.ok ? p.resolve(f.payload) : p.reject(new Error(f.error?.message || "request failed"));
+    }
+  }
+  request(method, params) {
+    if (!this.ws || this.ws.readyState !== 1) return Promise.reject(new Error("not connected"));
+    const id = uuid();
+    this.ws.send(JSON.stringify({ type: "req", id, method, params }));
+    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+  }
+  doConnect() {
+    this.sentConnect = true;
+    const params = {
+      minProtocol: 3, maxProtocol: 3,
+      client: { id: "jarvis-ui", version: "1.0.0", platform: navigator.platform || "web", mode: "webchat" },
+      role: "operator",
+      scopes: ["operator.read", "operator.write"],
+      caps: [],
+      auth: store.token ? { token: store.token } : undefined,
+      userAgent: navigator.userAgent,
+      locale: navigator.language,
+    };
+    this.request("connect", params)
+      .then(() => {
+        this.backoff = 900;
+        setConn("online"); setFleetActive(true);
+        feed("uplink established");
+        addMsg("sys", "UPLINK ESTABLISHED — CIPHER ONLINE");
+      })
+      .catch((e) => {
+        setConn("off");
+        addMsg("err", `Handshake rejected: ${e.message}`);
+        feed(`handshake rejected: ${e.message}`);
+        this.disconnect();
+      });
+  }
+  sendChat(text) {
+    const idempotencyKey = uuid();
+    this.streamText = ""; this.streamEl = null;
+    return this.request("chat.send", { sessionKey: store.session, message: text, deliver: false, idempotencyKey })
+      .then((ack) => { this.activeRun = ack?.runId ?? null; feed(`run started (${(ack?.runId ?? "?").slice(0, 8)})`); })
+      .catch((e) => { addMsg("err", `Send failed: ${e.message}`); this.clearTyping(); });
+  }
+  abortRun() {
+    this.request("chat.abort", { sessionKey: store.session })
+      .then(() => { feed("run aborted"); addMsg("sys", "RUN ABORTED"); this.clearTyping(); })
+      .catch((e) => addMsg("err", `Abort failed: ${e.message}`));
+  }
+  clearTyping() { document.querySelector(".typing")?.remove(); ui.send.disabled = false; }
+  onChat(p) {
+    if (!p || p.sessionKey !== store.session) return;
+    const text = typeof p.message === "string" ? p.message
+      : p.message?.content?.map?.((c) => c.text ?? "").join("") ?? p.message?.text ?? "";
+    if (p.state === "delta") {
+      if (!this.streamEl) { this.clearTyping(); this.streamEl = addMsg("bot", "", "CIPHER"); }
+      if (text) { this.streamText = text; this.streamEl.lastChild.textContent = text; ui.log.scrollTop = ui.log.scrollHeight; }
+    } else if (p.state === "final") {
+      this.clearTyping();
+      const finalText = text || this.streamText;
+      if (this.streamEl) { this.streamEl.lastChild.textContent = finalText; }
+      else if (finalText) addMsg("bot", finalText, "CIPHER");
+      this.streamEl = null; this.streamText = "";
+      feed("reply delivered");
+    } else if (p.state === "error") {
+      this.clearTyping();
+      addMsg("err", p.errorMessage || "agent error");
+      feed(`error: ${p.errorMessage ?? "unknown"}`);
+      this.streamEl = null;
+    } else if (p.state === "aborted") {
+      this.clearTyping(); this.streamEl = null;
+    }
+  }
+  onAgent(p) {
+    if (!p) return;
+    const stream = p.stream ?? "";
+    if (stream === "tool") {
+      const name = p.data?.name ?? p.data?.tool ?? "tool";
+      feed(`⚙ ${name}`);
+      // light up worker card on tool use
+      ui.cards.worker.classList.remove("idle");
+      clearTimeout(this._workerIdle);
+      this._workerIdle = setTimeout(() => ui.cards.worker.classList.add("idle"), 4000);
+    }
+  }
+}
+
+const gw = new Gateway();
+
+/* ================= wiring ================= */
+const drawer = document.getElementById("drawer");
+ui.pill.addEventListener("click", () => drawer.classList.toggle("open"));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") drawer.classList.remove("open"); });
+
+const cfgUrl = document.getElementById("cfg-url");
+const cfgToken = document.getElementById("cfg-token");
+const cfgSession = document.getElementById("cfg-session");
+cfgUrl.value = store.url; cfgToken.value = store.token; cfgSession.value = store.session;
+ui.sessionLabel.textContent = store.session;
+
+document.getElementById("cfg-save").addEventListener("click", () => {
+  store.url = cfgUrl.value.trim();
+  store.token = cfgToken.value.trim();
+  store.session = cfgSession.value.trim() || "main";
+  ui.sessionLabel.textContent = store.session;
+  drawer.classList.remove("open");
+  gw.disconnect();
+  setTimeout(() => gw.connect(), 250);
+});
+
+function submit() {
+  const text = ui.input.value.trim();
+  if (!text) return;
+  ui.input.value = ""; ui.input.style.height = "auto";
+  addMsg("user", text, "BROSKI");
+  const typing = addMsg("bot typing", "", "CIPHER");
+  typing.classList.add("typing");
+  typing.innerHTML += "<i></i><i></i><i></i>";
+  ui.send.disabled = true;
+  gw.sendChat(text);
+}
+ui.send.addEventListener("click", submit);
+ui.abort.addEventListener("click", () => gw.abortRun());
+ui.input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+ui.input.addEventListener("input", () => {
+  ui.input.style.height = "auto";
+  ui.input.style.height = Math.min(ui.input.scrollHeight, 130) + "px";
+});
+
+/* auto-connect if a token is already stored */
+if (store.token) gw.connect(); else feed("no token configured — open the status pill to link");
+</script>
+</body>
+</html>
